@@ -44,62 +44,78 @@
 #include <LiquidCrystal.h>
 #include <Servo.h>
 
-Servo myservo;  // create servo object to control a servo
+#define NUM_TRACKS 4
+
+Servo servos[2];  // create servo objects to control the servos
+
 // initialize the library by associating any needed LCD interface pin
 // with the arduino pin number it is connected to
-const int rs = 12, en = 11, d4 = 5, d5 = 4, d6 = 3, d7 = 2;
+const int rs = 3, en = 2, d4 = 4, d5 = 5, d6 = 6, d7 = 7;
 LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 
-const int startknop = 7;
+// setup some constant, may need changing for your setup
+const int start_button = 8;
+const int hold_angle = 70;
+const int release_angle = 0; 
 
-const int servopin = 6;
-const int vasthoek = 50;
-const int loslaathoek = 120; 
+// push buttons for the tracks;
+const int tracks[NUM_TRACKS] = {A0, A1, A2, A3};
 
-const int baan1 = 13;
-const int baan2 = 8;
-const int baan3 = 9;
-const int baan4 = 10;
-
-bool klaar1 = false;
-bool klaar2 = false;
-bool klaar3 = false;
-bool klaar4 = false;
-
-unsigned long starttime;
-bool running = false;
+// which tracks have already finished
+bool tracks_ready[NUM_TRACKS] = {true, true, true, true};
+// times of the finished tracks
+int tracks_times[NUM_TRACKS] = {-1,-1,-1,-1};
+// number of tracks that are done
+int tracks_done = 0;
+// to keep track of time
+unsigned long start_time = 0;
 
 void setup() {
-  pinMode(startknop, INPUT);
-  pinMode(baan1, INPUT);
-  pinMode(baan2, INPUT);
-  pinMode(baan3, INPUT);
-  pinMode(baan4, INPUT);
-  // set up the LCD's number of columns and rows:
-  lcd.begin(16, 2);
-  // set up the servo's
-  myservo.attach(servopin);
+  pinMode(start_button, INPUT);
+  lcd.begin(16, 2); 
+  for(int i=0; i<NUM_TRACKS; i++){
+      pinMode(tracks[i], INPUT);
+  }
+  servos[0].attach(9);
+  servos[1].attach(10);
+  servos[0].write(hold_angle);
+  servos[1].write(release_angle);
 }
 
-void loop() {
-  if (digitalRead(startknop)) {
-    // startknop is ingedrukt
-    lcd.setCursor(0,0);
-    lcd.print("Ready?, GO!");
-    // draai de servos
-    starttime = millis();
-    running = true;
-    myservo.write(loslaathoek);
-  }
-  if (running) {
-    // Balletjes zijn aan het rollen
-    lcd.setCursor(0, 1);
-    lcd.print(millis() - starttime);
-    lcd.print("ms");
-  }
-  if (digitalRead(baan1) &! klaar1) {int timing = millis() - starttime; klaar2 = true; if(running) {lcd.clear(); running = false; myservo.write(loslaathoek); } lcd.setCursor(0,0); lcd.print("1:"); lcd.print(timing);}
-  if (digitalRead(baan2) &! klaar2) {int timing = millis() - starttime; klaar2 = true; if(running) {lcd.clear(); running = false; myservo.write(loslaathoek); } lcd.setCursor(0,8); lcd.print("2:"); lcd.print(timing);}
-  if (digitalRead(baan3) &! klaar3) {int timing = millis() - starttime; klaar3 = true; if(running) {lcd.clear(); running = false; myservo.write(loslaathoek); } lcd.setCursor(1,0); lcd.print("3:"); lcd.print(timing);}
-  if (digitalRead(baan4) &! klaar4) {int timing = millis() - starttime; klaar4 = true; if(running) {lcd.clear(); running = false; myservo.write(loslaathoek); } lcd.setCursor(1,8); lcd.print("4:"); lcd.print(timing);}
 
+void loop() {
+  if (digitalRead(start_button)) {
+    // start_button is pushed, clear the screen
+    lcd.clear();
+    start_time = micros();
+    // release the balls!
+    servos[0].write(release_angle);
+    servos[1].write(hold_angle);
+    for(int i = 0; i <= 3; ++i) {
+      tracks_ready[i] = false;
+    }
+  }
+  for (int i = 0; i < NUM_TRACKS; i++)
+  {
+    // if a ball reached the button, and has not already finished
+    if (digitalRead(tracks[i]) &! tracks_ready[i]) {
+      unsigned long timing = (micros() - start_time) / 1000; 
+      tracks_ready[i] = true; 
+      tracks_times[i] = timing;
+      tracks_done++;
+      servos[0].write(hold_angle);
+      servos[1].write(release_angle);
+    }
+  }
+  if (tracks_done >= NUM_TRACKS) {
+    // All tracks have finished, print results to screen
+    for (int i = 0; i < NUM_TRACKS; i++) {
+      lcd.setCursor((i%2)*8, i>>1); 
+      lcd.print('1' + i); 
+      lcd.print(":"); 
+      lcd.print(tracks_times[i]);
+      lcd.print("ms");
+    }
+    tracks_done = 0;
+  }
 }
